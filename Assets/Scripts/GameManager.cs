@@ -16,6 +16,10 @@ public class GameManager : MonoBehaviour
     [FormerlySerializedAs("availableMoveSquareDot")] [FormerlySerializedAs("_available_move_square_dot")] [SerializeField]
     private Transform _availableMoveSquareDot;
 
+    [SerializeField] private Transform _gText;
+    [SerializeField] private Transform _replayButton;
+    
+
     private readonly Dictionary<Vector2Int, Transform> _availableSquares = new Dictionary<Vector2Int, Transform>();
 
     // Start is called before the first frame update
@@ -38,16 +42,17 @@ public class GameManager : MonoBehaviour
 
     public void TurnCleanup()
     {
-        switch (Win(_gridManager.Board, _turn))
+        switch (YouWon(_gridManager.Board, _turn))
         {
             case WinState.Win:
-                Debug.Log("WIN");
+                Object.Instantiate(_gText, new Vector3(8.0f / 2.0f - 0.5f, 8.0f / 2.0f - 0.5f, 0), Quaternion.identity);
+                Object.Instantiate(_gText, new Vector3(8.0f / 2.0f + 0.5f, 8.0f / 2.0f - 0.5f, 0), Quaternion.identity);
+                Object.Instantiate(_replayButton, new Vector3(8.0f / 2.0f, 8.0f / 2.0f + 0.5f, 0), Quaternion.identity);
                 break;
             case WinState.Stalemate:
-                Debug.Log("STALEMATE");
+                Object.Instantiate(_replayButton, new Vector3(8.0f / 2.0f, 8.0f / 2.0f + 0.5f, 0), Quaternion.identity);
                 break;
             case WinState.None:
-                Debug.Log("NONE");
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
@@ -78,6 +83,7 @@ public class GameManager : MonoBehaviour
                 // In turn cleanup we check for win and increment turn
                 TurnCleanup();
             }
+
             RemovePreviousSelectedPiece();
         }
         else
@@ -113,7 +119,7 @@ public class GameManager : MonoBehaviour
                     continue;
                 }
 
-                if (GetAvailableSquares(board, new Vector2Int(x, y)).Count != 0)
+                if (GetAvailableSquaresWithKingCheck(board, new Vector2Int(x, y)).Count != 0)
                 {
                     return true;
                 }
@@ -129,22 +135,22 @@ public class GameManager : MonoBehaviour
         // update our piece in question with whatever piece the user selected
         _gridManager.OverrideNewPieceAtLocation(_promotedPieceLocation, _turn, pieceType);
         _isMidPrompt = false;
-        
+
         // don't forget to check for win with cleanup
         TurnCleanup();
     }
 
     // the king must be both in check and the opponent must have a move that
     // removes them from the check
-    private static WinState Win(Piece[,] board, Player player)
+    private static WinState YouWon(Piece[,] board, Player you)
     {
-        var kRef = GetKingRef(board, player);
+        var opponent = (Player)((int)you * -1);
+        var opponentKingRef = GetKingRef(board, opponent);
 
-        bool king = AnyPieceCanMove(board, player);
-        bool kingCanGetCapturedByOpponent = PieceCanGetCapturedByOpponent(board, kRef);
-
-        return king switch {
-            false when !kingCanGetCapturedByOpponent => WinState.Stalemate,
+        bool opponentKingInCheck = PieceCanGetCapturedByOpponent(board, opponentKingRef);
+        
+        return AnyPieceCanMove(board, opponent) switch {
+            false when !opponentKingInCheck => WinState.Stalemate,
             false => WinState.Win,
             _ => WinState.None
         };
@@ -173,21 +179,54 @@ public class GameManager : MonoBehaviour
     }
 
     // We need this function just for the case that we're moving a pawn to promotion
-    private bool ShouldPromote(Piece[,] board, Vector2Int to)
+    private static bool ShouldPromote(Piece[,] board, Vector2Int to)
     {
         var p = board[to.y, to.x]!;
 
         return p.PieceType == PieceType.Pawn && (p.Owner == Player.Me && to.y == 7);
     }
 
+    public static List<Vector2Int> GetAvailableSquaresFromDirectionVectors(Piece[,] board, Piece p, Vector2Int pRef, Vector2Int[] directionVectors)
+    {
+        var newAvailableSquares = new List<Vector2Int>();
+
+        foreach (var direction in directionVectors)
+        {
+            Vector2Int currentLoc = pRef;
+            while (true)
+            {
+                currentLoc += direction;
+                if (!IsWithinRange(currentLoc))
+                {
+                    break;
+                }
+
+                Piece pieceAtLocation = board[currentLoc.y, currentLoc.x];
+                if (pieceAtLocation != null && pieceAtLocation.Owner == p.Owner)
+                {
+                    break;
+                }
+                else if (pieceAtLocation != null)
+                {
+                    newAvailableSquares.Add(currentLoc);
+                    break;
+                }
+                newAvailableSquares.Add(currentLoc);
+            }
+        }
+        return newAvailableSquares;
+    }
+
+    // Returns the possible squares something can move to, not counting if they expose the king or not
     private static List<Vector2Int> GetAvailableSquares(Piece[,] board, Vector2Int pRef)
     {
         var newAvailableSquares = new List<Vector2Int>();
-        var p = board[pRef.y, pRef.x]!;
+        var p = board[pRef.y, pRef.x];
 
         switch (p.PieceType)
         {
             case PieceType.Pawn:
+            {
                 var directionVector = new Vector2Int(0, 1) * (int)p.Owner;
                 var magnitude = 1;
 
@@ -218,18 +257,17 @@ public class GameManager : MonoBehaviour
                 foreach (var direction in captureDirections)
                 {
                     var newLocation = pRef + direction;
-                    if (IsWithinRange(newLocation))
+                    if (!IsWithinRange(newLocation)) continue;
+                    var pieceToCapture = board[newLocation.y, newLocation.x];
+                    if (pieceToCapture != null && pieceToCapture.Owner != p.Owner)
                     {
-                        Piece pieceToCapture = board[newLocation.y, newLocation.x];
-                        if (pieceToCapture != null && pieceToCapture.Owner != p.Owner)
-                        {
-                            newAvailableSquares.Add(newLocation);
-                        }
+                        newAvailableSquares.Add(newLocation);
                     }
                 }
 
-                Debug.LogFormat("our direction coord {0}, {1}", directionVector.x, directionVector.y);
-                Debug.LogFormat("our current coord {0}, {1}", pRef.x, pRef.y);
+                // Debug.LogFormat("our direction coord {0}, {1}", directionVector.x, directionVector.y);
+                // Debug.LogFormat("our current coord {0}, {1}", pRef.x, pRef.y);
+
                 // now handle front case
                 var current = pRef;
                 for (var i = 1; i <= magnitude; i++)
@@ -250,23 +288,136 @@ public class GameManager : MonoBehaviour
                 }
 
                 break;
+            }
             case PieceType.Knight:
+            {
+                // The knight can move in an l shape
+                Vector2Int[] dxDyList = {
+                    new Vector2Int(1, 2),
+                    new Vector2Int(-1, 2),
+                    new Vector2Int(2, 1),
+                    new Vector2Int(-2, 1)
+                };
+
+                int[] factorsToMultiplyToFlipY = {
+                    -1,
+                    1
+                };
+
+                foreach (var dxDy in dxDyList)
+                {
+                    foreach (int factor in factorsToMultiplyToFlipY)
+                    {
+                        var localDxDy = dxDy;
+                        localDxDy.y *= factor;
+
+                        var newLoc = new Vector2Int(pRef.x + localDxDy.x, pRef.y + localDxDy.y);
+                        if (!IsWithinRange(newLoc))
+                        {
+                            continue;
+                        }
+
+                        Piece pieceAtNewLoc = board[newLoc.y, newLoc.x];
+                        if (pieceAtNewLoc != null && p.Owner == pieceAtNewLoc.Owner)
+                        {
+                            continue;
+                        }
+
+                        newAvailableSquares.Add(newLoc);
+                    }
+                }
                 break;
+            }
             case PieceType.Bishop:
+            {
+                Vector2Int[] directionVectors = {
+                    new Vector2Int(1, 1),
+                    new Vector2Int(-1, 1),
+                    new Vector2Int(-1, -1),
+                    new Vector2Int(1, -1),
+                };
+
+                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
+                {
+                    newAvailableSquares.Add(square);
+                }
+
                 break;
+            }
             case PieceType.Rook:
+            {
+                Vector2Int[] directionVectors = {
+                    new Vector2Int(1, 0),
+                    new Vector2Int(-1, 0),
+                    new Vector2Int(0, 1),
+                    new Vector2Int(0, -1),
+                };
+
+                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
+                {
+                    newAvailableSquares.Add(square);
+                }
                 break;
+            }
             case PieceType.Queen:
+            {
+                // Debug.Log("HI");
+                Vector2Int[] directionVectors = {
+                    new Vector2Int(1, 1),
+                    new Vector2Int(-1, 1),
+                    new Vector2Int(-1, -1),
+                    new Vector2Int(1, -1),
+                    new Vector2Int(1, 0),
+                    new Vector2Int(-1, 0),
+                    new Vector2Int(0, 1),
+                    new Vector2Int(0, -1),
+                };
+
+                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
+                {
+                    newAvailableSquares.Add(square);
+                }
                 break;
+            }
             // hardest, since we can't move into a check
             case PieceType.King:
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        if (dx == 0 && dy == 0)
+                        {
+                            continue;
+                        }
+                        Vector2Int newLoc = new Vector2Int(pRef.x + dx, pRef.y + dy);
+                        if (!IsWithinRange(newLoc))
+                        {
+                            continue;
+                        }
+                        Piece pieceAtLoc = board[newLoc.y, newLoc.x];
+                        if (pieceAtLoc != null && pieceAtLoc.Owner == p.Owner)
+                        {
+                            continue;
+                        }
+                        newAvailableSquares.Add(new Vector2Int(pRef.x + dx, pRef.y + dy));
+                    }
+                }
                 break;
+            }
             default:
                 // unreachable
                 throw new ArgumentOutOfRangeException();
         }
 
-        return newAvailableSquares.Where(square => !AfterMoveKingIsExposed(board, pRef, square)).ToList();
+        return newAvailableSquares;
+    }
+
+    public static List<Vector2Int> GetAvailableSquaresWithKingCheck(Piece[,] board, Vector2Int pRef)
+    {
+        var squares = GetAvailableSquares(board, pRef);
+
+        return squares.Where(square => !AfterMoveKingIsExposed(board, pRef, square)).ToList();
     }
 
     private void MakePieceSelected(Vector2Int pieceRef)
@@ -275,8 +426,9 @@ public class GameManager : MonoBehaviour
         // should be allowed
 
         // Debug.Log("working" + square.x + square.y);
-        foreach (var square in GetAvailableSquares(_gridManager.Board, pieceRef))
+        foreach (var square in GetAvailableSquaresWithKingCheck(_gridManager.Board, pieceRef))
         {
+            // Debug.LogFormat("({0},{1})", square.x, square.y);
             var t = Object.Instantiate(_availableMoveSquareDot, new Vector3(square.x, square.y, 0),
                 Quaternion.identity);
             _availableSquares.Add(square, t);
@@ -293,34 +445,35 @@ public class GameManager : MonoBehaviour
         var p = newBoard[from.y, from.x];
         var o = p.Owner;
 
-        newBoard[to.x, to.y] = board[from.x, from.x];
-        newBoard[from.x, from.y] = null;
+        newBoard[to.y, to.x] = newBoard[from.y, from.x];
+        newBoard[from.y, from.x] = null;
 
         var kRef = GetKingRef(newBoard, o);
         return PieceCanGetCapturedByOpponent(newBoard, kRef);
     }
 
-    private static bool PieceCanGetCapturedByOpponent(Piece[,] board, Vector2Int pieceThatCanGetCapturedRef)
+    private static bool PieceCanGetCapturedByOpponent(Piece[,] board, Vector2Int pieceInDangerRef)
     {
-        var pieceThatCanBeCaptured = board[pieceThatCanGetCapturedRef.y, pieceThatCanGetCapturedRef.x];
+        var pieceInDanger = board[pieceInDangerRef.y, pieceInDangerRef.x];
 
         for (var y = 0; y < 8; y++)
         {
             for (var x = 0; x < 8; x++)
             {
-                var piece = board[y, x];
-                if (piece == null)
+                var capturer = board[y, x];
+                if (capturer == null)
                 {
                     continue;
                 }
 
-                if (piece.Owner == pieceThatCanBeCaptured.Owner)
+                // only get pieces that can capture this piece
+                if (capturer.Owner == pieceInDanger.Owner)
                 {
                     continue;
                 }
 
-                var pieceRef = new Vector2Int();
-                if (GetAvailableSquares(board, pieceRef).Contains(pieceThatCanGetCapturedRef))
+                var capturerRef = new Vector2Int(x, y);
+                if (GetAvailableSquares(board, capturerRef).Contains(pieceInDangerRef))
                 {
                     return true;
                 }

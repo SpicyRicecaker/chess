@@ -83,7 +83,7 @@ public class GridManager : MonoBehaviour
 
     private PieceType? GetPieceTypeFromChar(char c)
     {
-        Debug.Log(c);
+        // Debug.Log(c);
         PieceType pieceType;
         switch (c)
         {
@@ -128,7 +128,7 @@ public class GridManager : MonoBehaviour
                     continue;
                 }
                 var pieceType = pieceTypeOp ?? 0;
-                
+
                 Transform chessPieceFab = GetPieceFabFromPieceType(pieceType!);
                 var pieceTransform = Object.Instantiate(chessPieceFab, new Vector3(x, y, 0), Quaternion.identity);
                 var owner = y <= 1 ? Player.Me : Player.Other;
@@ -141,28 +141,4 @@ public class GridManager : MonoBehaviour
         var centeredCameraPosition = new Vector3(_WIDTH / 2.0f - MIDDLE_OFFSET, _HEIGHT / 2.0f - MIDDLE_OFFSET, transform1.position.z);
         transform1.position = centeredCameraPosition;
     }
-
-    public void DebugPrintBoard()
-    {
-        for (var y = 0; y < 8; y++)
-        {
-            for (var x = 0; x < 8; x++)
-            {
-                Debug.Log(Board[y, x]);
-            }
-        }
-    }
-
-    // generate a transform for
-
-    // Update is called once per frame
-    // void Update()
-    // {
-    //
-    // }
-}
-
-public class Board
-{
-
 }
