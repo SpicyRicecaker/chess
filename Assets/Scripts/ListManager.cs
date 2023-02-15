@@ -7,26 +7,14 @@ public class ListManager : MonoBehaviour
     // two lists will be implemented as a stack that grows from top to the
     // bottom for me, and bottom to top for the other
     public Dictionary<Player, List<Piece>> Stack = new Dictionary<Player, List<Piece>>();
-    public Dictionary<Player, Stack> LocationAndDirectionByPlayer = new Dictionary<Player, Stack>() {
+    private readonly Dictionary<Player, Stack> _locationAndDirectionByPlayer = new Dictionary<Player, Stack>() {
         {Player.Me, new Stack(new Vector2Int(-1, 7), new Vector2Int(-1, -1))},
         {Player.Other, new Stack(new Vector2Int(8, 0), new Vector2Int(1, 1))}
     };
 
-    // Start is called before the first frame update
-    void Start()
-    {
-
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-
-    }
-
     public void PlaceNewCapturedPiece(Piece p, Player o)
     {
-        var stack = LocationAndDirectionByPlayer[o];
+        var stack = _locationAndDirectionByPlayer[o];
 
         var pieceLocation = p.Transform.position;
 

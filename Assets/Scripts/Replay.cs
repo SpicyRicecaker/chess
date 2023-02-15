@@ -9,7 +9,7 @@ public class Replay : MonoBehaviour
     [SerializeField] private SpriteRenderer _renderer;
     [SerializeField] private Color _preColor, _postColor;
     // Start is called before the first frame update
-    void Start()
+    private void Start()
     {
         _renderer.color = _preColor;
 
@@ -28,11 +28,5 @@ public class Replay : MonoBehaviour
     private void OnMouseDown()
     {
         SceneManager.LoadScene("SampleScene");
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 }

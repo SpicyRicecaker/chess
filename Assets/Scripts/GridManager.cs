@@ -2,6 +2,7 @@
 // using System.Collections.Generic;
 
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -24,7 +25,14 @@ public class GridManager : MonoBehaviour
 
     private const int _WIDTH = 8;
     private const int _HEIGHT = 8;
-    public Piece[,] Board = new Piece[_HEIGHT, _WIDTH];
+    public Board Board = new Board(new Piece[_HEIGHT, _WIDTH], new Dictionary<Player, bool>() {
+        {
+            Player.Me, false
+        }, {
+            Player.Other, false
+            
+        }
+    });
 
     private static readonly string[] _INITIAL_BOARD_CONFIG = {
         "rnbqkbnr",
@@ -41,78 +49,47 @@ public class GridManager : MonoBehaviour
     public void OverrideNewPieceAtLocation(Vector2Int coord, Player owner, PieceType pieceType)
     {
         // check if the piece already exists there
-        Piece p = Board[coord.y, coord.x];
+        var p = Board[coord.y, coord.x];
         if (p != null)
         {
             Object.Destroy(p.Transform.gameObject);
         }
-        Transform chessPieceFab = GetPieceFabFromPieceType(pieceType);
+        var chessPieceFab = GetPieceFabFromPieceType(pieceType);
         var chessPieceTransform = Object.Instantiate(chessPieceFab, new Vector3(coord.x, coord.y, 0), Quaternion.identity);
-        Piece newP = new Piece(owner, pieceType, chessPieceTransform);
+        var newP = new Piece(owner, pieceType, chessPieceTransform);
         Board[coord.y, coord.x] = newP;
     }
 
     private Transform GetPieceFabFromPieceType(PieceType pieceType)
     {
-        Transform pieceFab;
-        switch (pieceType)
-        {
-            case PieceType.Bishop:
-                pieceFab = _b;
-                break;
-            case PieceType.Knight:
-                pieceFab = _n;
-                break;
-            case PieceType.Pawn:
-                pieceFab = _p;
-                break;
-            case PieceType.Rook:
-                pieceFab = _r;
-                break;
-            case PieceType.King:
-                pieceFab = _k;
-                break;
-            case PieceType.Queen:
-                pieceFab = _q;
-                break;
-            default:
-                throw new NotSupportedException();
-        }
+        var pieceFab = pieceType switch {
+            PieceType.Bishop => _b,
+            PieceType.Knight => _n,
+            PieceType.Pawn => _p,
+            PieceType.Rook => _r,
+            PieceType.King => _k,
+            PieceType.Queen => _q,
+            _ => throw new NotSupportedException()
+        };
         return pieceFab;
     }
 
-    private PieceType? GetPieceTypeFromChar(char c)
+    private static PieceType? GetPieceTypeFromChar(char c)
     {
         // Debug.Log(c);
-        PieceType pieceType;
-        switch (c)
-        {
-            case 'r':
-                pieceType = PieceType.Rook;
-                break;
-            case 'n':
-                pieceType = PieceType.Knight;
-                break;
-            case 'b':
-                pieceType = PieceType.Bishop;
-                break;
-            case 'q':
-                pieceType = PieceType.Queen;
-                break;
-            case 'k':
-                pieceType = PieceType.King;
-                break;
-            case 'p':
-                pieceType = PieceType.Pawn;
-                break;
-            default:
-                return null;
-        }
-        return pieceType;
+        return c switch {
+            'r' => PieceType.Rook,
+            'n' => PieceType.Knight,
+            'b' => PieceType.Bishop,
+            'q' => PieceType.Queen,
+            'k' => PieceType.King,
+            'p' => PieceType.Pawn,
+            _ => null
+        };
     }
 
     // Start is called before the first frame update
-    void Start()
+    private void Start()
     {
         // Based off of our readonly string, generate the chess pieces
         for (var y = 0; y < _INITIAL_BOARD_CONFIG.Length; y++)
@@ -129,7 +106,7 @@ public class GridManager : MonoBehaviour
                 }
                 var pieceType = pieceTypeOp ?? 0;
 
-                Transform chessPieceFab = GetPieceFabFromPieceType(pieceType!);
+                var chessPieceFab = GetPieceFabFromPieceType(pieceType!);
                 var pieceTransform = Object.Instantiate(chessPieceFab, new Vector3(x, y, 0), Quaternion.identity);
                 var owner = y <= 1 ? Player.Me : Player.Other;
                 Board[y, x] = new Piece(owner, pieceType, pieceTransform);

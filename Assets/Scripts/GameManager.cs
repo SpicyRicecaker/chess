@@ -2,10 +2,10 @@ using System;
 // using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Object = UnityEngine.Object;
-
 
 public class GameManager : MonoBehaviour
 {
@@ -18,7 +18,7 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] private Transform _gText;
     [SerializeField] private Transform _replayButton;
-    
+
 
     private readonly Dictionary<Vector2Int, Transform> _availableSquares = new Dictionary<Vector2Int, Transform>();
 
@@ -28,19 +28,16 @@ public class GameManager : MonoBehaviour
     private bool _isMidPrompt;
     private Vector2Int _promotedPieceLocation;
 
-    void Start()
+    private Dictionary<Player, bool> _isKingMoved = new Dictionary<Player, bool>();
+
+    private void Start()
     {
         _gridManager = GameObject.FindGameObjectWithTag("GridManager").GetComponent<GridManager>();
         _listManager = GameObject.FindGameObjectWithTag("ListManager").GetComponent<ListManager>();
         _promptManager = GameObject.FindGameObjectWithTag("PromptManager").GetComponent<PromptManager>();
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-    }
-
-    public void TurnCleanup()
+    private void TurnCleanup()
     {
         switch (YouWon(_gridManager.Board, _turn))
         {
@@ -88,7 +85,7 @@ public class GameManager : MonoBehaviour
         }
         else
         {
-            Piece piece = _gridManager.Board[e.y, e.x];
+            var piece = _gridManager.Board[e.y, e.x];
 
             RemovePreviousSelectedPiece();
 
@@ -107,7 +104,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private static bool AnyPieceCanMove(Piece[,] board, Player player)
+    private static bool AnyPieceCanMove(Board board, Player player)
     {
         for (var y = 0; y < 8; y++)
         {
@@ -142,13 +139,13 @@ public class GameManager : MonoBehaviour
 
     // the king must be both in check and the opponent must have a move that
     // removes them from the check
-    private static WinState YouWon(Piece[,] board, Player you)
+    private static WinState YouWon(Board board, Player you)
     {
         var opponent = (Player)((int)you * -1);
         var opponentKingRef = GetKingRef(board, opponent);
 
         bool opponentKingInCheck = PieceCanGetCapturedByOpponent(board, opponentKingRef);
-        
+
         return AnyPieceCanMove(board, opponent) switch {
             false when !opponentKingInCheck => WinState.Stalemate,
             false => WinState.Win,
@@ -159,7 +156,7 @@ public class GameManager : MonoBehaviour
 
     private void MoveToThisSquare(Vector2Int from, Vector2Int to)
     {
-        Piece p = _gridManager.Board[to.y, to.x];
+        var p = _gridManager.Board[to.y, to.x];
         if (p != null)
         {
             _listManager.PlaceNewCapturedPiece(p, _turn);
@@ -167,6 +164,12 @@ public class GameManager : MonoBehaviour
 
         // attempt to move our current piece
         // move the taken piece to the list
+        p = _gridManager.Board[from.y, from.x];
+        if (p.PieceType is PieceType.King)
+        {
+            _isKingMoved[p.Owner] = true;
+        }
+
         _gridManager.Board[to.y, to.x] = _gridManager.Board[from.y, from.x];
         _gridManager.Board[from.y, from.x] = null;
         _gridManager.Board[to.y, to.x].Transform.position = new Vector3(to.x, to.y, 0);
@@ -179,20 +182,21 @@ public class GameManager : MonoBehaviour
     }
 
     // We need this function just for the case that we're moving a pawn to promotion
-    private static bool ShouldPromote(Piece[,] board, Vector2Int to)
+    private static bool ShouldPromote(Board board, Vector2Int to)
     {
         var p = board[to.y, to.x]!;
 
         return p.PieceType == PieceType.Pawn && (p.Owner == Player.Me && to.y == 7);
     }
 
-    public static List<Vector2Int> GetAvailableSquaresFromDirectionVectors(Piece[,] board, Piece p, Vector2Int pRef, Vector2Int[] directionVectors)
+    private static IEnumerable<Vector2Int> GetAvailableSquaresFromDirectionVectors(Board board, Piece p, Vector2Int pRef,
+        IEnumerable<Vector2Int> directionVectors)
     {
         var newAvailableSquares = new List<Vector2Int>();
 
         foreach (var direction in directionVectors)
         {
-            Vector2Int currentLoc = pRef;
+            var currentLoc = pRef;
             while (true)
             {
                 currentLoc += direction;
@@ -201,7 +205,7 @@ public class GameManager : MonoBehaviour
                     break;
                 }
 
-                Piece pieceAtLocation = board[currentLoc.y, currentLoc.x];
+                var pieceAtLocation = board[currentLoc.y, currentLoc.x];
                 if (pieceAtLocation != null && pieceAtLocation.Owner == p.Owner)
                 {
                     break;
@@ -218,7 +222,7 @@ public class GameManager : MonoBehaviour
     }
 
     // Returns the possible squares something can move to, not counting if they expose the king or not
-    private static List<Vector2Int> GetAvailableSquares(Piece[,] board, Vector2Int pRef)
+    private static List<Vector2Int> GetAvailableSquares(Board board, Vector2Int pRef)
     {
         var newAvailableSquares = new List<Vector2Int>();
         var p = board[pRef.y, pRef.x];
@@ -317,7 +321,7 @@ public class GameManager : MonoBehaviour
                             continue;
                         }
 
-                        Piece pieceAtNewLoc = board[newLoc.y, newLoc.x];
+                        var pieceAtNewLoc = board[newLoc.y, newLoc.x];
                         if (pieceAtNewLoc != null && p.Owner == pieceAtNewLoc.Owner)
                         {
                             continue;
@@ -337,10 +341,7 @@ public class GameManager : MonoBehaviour
                     new Vector2Int(1, -1),
                 };
 
-                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
-                {
-                    newAvailableSquares.Add(square);
-                }
+                newAvailableSquares.AddRange(GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors));
 
                 break;
             }
@@ -353,10 +354,7 @@ public class GameManager : MonoBehaviour
                     new Vector2Int(0, -1),
                 };
 
-                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
-                {
-                    newAvailableSquares.Add(square);
-                }
+                newAvailableSquares.AddRange(GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors));
                 break;
             }
             case PieceType.Queen:
@@ -373,10 +371,7 @@ public class GameManager : MonoBehaviour
                     new Vector2Int(0, -1),
                 };
 
-                foreach (var square in GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors))
-                {
-                    newAvailableSquares.Add(square);
-                }
+                newAvailableSquares.AddRange(GetAvailableSquaresFromDirectionVectors(board, p, pRef, directionVectors));
                 break;
             }
             // hardest, since we can't move into a check
@@ -390,12 +385,12 @@ public class GameManager : MonoBehaviour
                         {
                             continue;
                         }
-                        Vector2Int newLoc = new Vector2Int(pRef.x + dx, pRef.y + dy);
+                        var newLoc = new Vector2Int(pRef.x + dx, pRef.y + dy);
                         if (!IsWithinRange(newLoc))
                         {
                             continue;
                         }
-                        Piece pieceAtLoc = board[newLoc.y, newLoc.x];
+                        var pieceAtLoc = board[newLoc.y, newLoc.x];
                         if (pieceAtLoc != null && pieceAtLoc.Owner == p.Owner)
                         {
                             continue;
@@ -403,6 +398,14 @@ public class GameManager : MonoBehaviour
                         newAvailableSquares.Add(new Vector2Int(pRef.x + dx, pRef.y + dy));
                     }
                 }
+                // // also allow for castles, if the king hasn't moved yet and is not in check
+                // if (!board.IsKingMoved[p.Owner] && !PieceCanGetCapturedByOpponent(board, pRef))
+                // {
+                //     // PROBLEM TODO: We need to keep track of what rook is moved (how do we handle promotions?)
+                //     // Calling the previous method also recurses forever yay!
+                //
+                // }
+
                 break;
             }
             default:
@@ -413,7 +416,7 @@ public class GameManager : MonoBehaviour
         return newAvailableSquares;
     }
 
-    public static List<Vector2Int> GetAvailableSquaresWithKingCheck(Piece[,] board, Vector2Int pRef)
+    private static List<Vector2Int> GetAvailableSquaresWithKingCheck(Board board, Vector2Int pRef)
     {
         var squares = GetAvailableSquares(board, pRef);
 
@@ -438,9 +441,9 @@ public class GameManager : MonoBehaviour
         _selectedPieceCoord = pieceRef;
     }
 
-    private static bool AfterMoveKingIsExposed(Piece[,] board, Vector2Int from, Vector2Int to)
+    private static bool AfterMoveKingIsExposed(Board board, Vector2Int from, Vector2Int to)
     {
-        var newBoard = (Piece[,])board.Clone();
+        var newBoard = (Board)board.Clone();
 
         var p = newBoard[from.y, from.x];
         var o = p.Owner;
@@ -452,7 +455,7 @@ public class GameManager : MonoBehaviour
         return PieceCanGetCapturedByOpponent(newBoard, kRef);
     }
 
-    private static bool PieceCanGetCapturedByOpponent(Piece[,] board, Vector2Int pieceInDangerRef)
+    private static bool PieceCanGetCapturedByOpponent(Board board, Vector2Int pieceInDangerRef)
     {
         var pieceInDanger = board[pieceInDangerRef.y, pieceInDangerRef.x];
 
@@ -483,7 +486,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    private static Vector2Int GetKingRef(Piece[,] board, Player o)
+    private static Vector2Int GetKingRef(Board board, Player o)
     {
         for (var y = 0; y < 8; y++)
         {
@@ -559,4 +562,26 @@ public enum WinState
     Win,
     Stalemate,
     None
+}
+
+public class Board : ICloneable
+{
+    public Piece[,] Pieces;
+    public Dictionary<Player, bool> IsKingMoved;
+
+    public Board(Piece[,] pieces, Dictionary<Player, bool> isKingMoved)
+    {
+        this.Pieces = pieces;
+        this.IsKingMoved = isKingMoved;
+    }
+    public object Clone()
+    {
+        return new Board((Piece[,])Pieces.Clone(), new Dictionary<Player, bool>(IsKingMoved));
+    }
+
+    public Piece this[int y, int x]
+    {
+        get => Pieces[y, x];
+        set => Pieces[y, x] = value;
+    }
 }

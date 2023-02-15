@@ -22,7 +22,7 @@ public class PromptManager : MonoBehaviour
     [SerializeField] private Transform _n;
     [SerializeField] private PromptTile _promptTile;
 
-    private List<Transform> _gameObjects = new List<Transform>();
+    private readonly List<Transform> _gameObjects = new List<Transform>();
     // Start is called before the first frame update
     void Start()
     {
@@ -33,27 +33,15 @@ public class PromptManager : MonoBehaviour
 
         for (var x = 0; x < _PROMOTION_LIST.Length; x++)
         {
-            Transform chessPieceTransform;
-            switch (_PROMOTION_LIST[x])
-            {
-                case PieceType.Queen:
-                    chessPieceTransform = _q;
-                    break;
-                case PieceType.Rook:
-                    chessPieceTransform = _r;
-                    break;
-                case PieceType.Bishop:
-                    chessPieceTransform = _b;
-                    break;
-                case PieceType.Knight:
-                    chessPieceTransform = _n;
-                    break;
-                // should be unreachable in most cases
-                case PieceType.Pawn:
-                case PieceType.King:
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
+            var chessPieceTransform = _PROMOTION_LIST[x] switch {
+                PieceType.Queen => _q,
+                PieceType.Rook => _r,
+                PieceType.Bishop => _b,
+                PieceType.Knight => _n,
+                // should be unreachable
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            
             var chessPieceObject = GameObject.Instantiate(chessPieceTransform, new Vector3(LEFT + x, TOP, 0), Quaternion.identity);
             _gameObjects.Add(chessPieceObject);
             chessPieceObject.gameObject.SetActive(false);
@@ -77,9 +65,4 @@ public class PromptManager : MonoBehaviour
         _gameManager.FinishPrompt(pieceType);
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-
-    }
 }

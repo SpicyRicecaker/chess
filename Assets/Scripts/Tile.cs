@@ -7,7 +7,7 @@ public class Tile : MonoBehaviour
 {
     private int _x;
     private int _y;
-    bool _isLightColoredSquare;
+    private bool _isLightColoredSquare;
     [SerializeField] private Color _lightColor, _darkColor;
     [SerializeField] private SpriteRenderer _renderer;
     [FormerlySerializedAs("_adjustment_layer")] [SerializeField] private GameObject _adjustmentLayer;
@@ -21,7 +21,7 @@ public class Tile : MonoBehaviour
         _renderer.color = this._isLightColoredSquare ? _lightColor : _darkColor;
     }
     // Start is called before the first frame update
-    void Start()
+    private void Start()
     {
         _game = GameObject.FindGameObjectWithTag("GameManager").GetComponent<GameManager>();
     }
@@ -30,24 +30,18 @@ public class Tile : MonoBehaviour
     // with the piece type it is attached to for the prompt.
     // option 2: create a new tile object, but this time when it is clicked se
 
-    void OnMouseEnter()
+    public void OnMouseEnter()
     {
         _adjustmentLayer.SetActive(true);
     }
 
-    void OnMouseExit()
+    public void OnMouseExit()
     {
         _adjustmentLayer.SetActive(false);
     }
 
-    void OnMouseDown()
+    private void OnMouseDown()
     {
         _game.SquareClicked(new Vector2Int(_x, _y));
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-
     }
 }
